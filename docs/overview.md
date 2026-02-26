@@ -4,39 +4,9 @@ livewakeword uses a hybrid ONNX + PyTorch architecture. Two frozen ONNX models h
 
 ## System Architecture
 
-```
-                        ┌──────────────────────────────────────────┐
-                        │           Training Pipeline              │
-                        │                                          │
-                        │  VITS TTS  ──► Augmentation ──► Feature  │
-                        │  + SLERP       (augment)        Extract  │
-                        │                                 (ONNX)   │
-                        │                    │                     │
-                        │                    ▼                     │
-                        │              .npy features               │
-                        │              (N, 16, 96)                 │
-                        │                    │                     │
-                        │                    ▼                     │
-                        │          3-Phase Trainer ──► .pt model   │
-                        │                                          │
-                        └──────────────────────────────────────────┘
+**Training Pipeline:** Synthetic speech is generated via VITS TTS with SLERP speaker blending, augmented with noise/reverb, then passed through frozen ONNX models (mel spectrogram → speech embedding) to produce `.npy` feature files. These features train a lightweight classifier head, which is saved as a `.pt` model.
 
-                        ┌──────────────────────────────────────────┐
-                        │          Inference Pipeline              │
-                        │                                          │
-                        │  Audio ──► Mel (ONNX) ──► Embedding     │
-                        │  16kHz     512-FFT        (ONNX)        │
-                        │            32 mels        96-dim CNN     │
-                        │                               │          │
-                        │                               ▼          │
-                        │                     Classifier (ONNX)    │
-                        │                     DNN or RNN head      │
-                        │                               │          │
-                        │                               ▼          │
-                        │                     Score [0, 1]         │
-                        │                                          │
-                        └──────────────────────────────────────────┘
-```
+**Inference Pipeline:** Raw 16kHz audio flows through the same frozen ONNX feature extractors (32-band mel spectrogram → 96-dim speech embedding), then through the trained classifier (exported to ONNX) to produce a detection score between 0 and 1.
 
 ## Why ONNX + PyTorch?
 
@@ -84,7 +54,7 @@ The embedding model uses a 5-block CNN with separable convolutions (1x3 + 3x1), 
 ```
 src/livewakeword/
 ├── config.py                    Pydantic config models + YAML loading
-├── cli.py                       Typer CLI (setup, generate, augment, train, export, run, detect)
+├── cli.py                       Typer CLI (setup, generate, augment, train, export, run)
 ├── models/
 │   ├── feature_extractor.py     MelSpectrogramFrontend + SpeechEmbedding (ONNX)
 │   ├── classifier.py            DNNClassifier, RNNClassifier, build_classifier()
@@ -100,7 +70,8 @@ src/livewakeword/
 ├── export/
 │   └── onnx.py                  ONNX export + INT8 quantization
 └── inference/
-    └── engine.py                StreamingWakeWordEngine (80ms frame processing)
+    ├── model.py                 Model class (simple prediction API)
+    └── listener.py              Listener class (async microphone detection)
 ```
 
 ## Pipeline Stages
