@@ -16,6 +16,7 @@ _logger = logging.getLogger(__name__)
 class ModelType(str, Enum):
     dnn = "dnn"
     rnn = "rnn"
+    conv_attention = "conv_attention"
 
 
 class ModelSize(str, Enum):
@@ -71,7 +72,7 @@ class WakeWordConfig(BaseModel):
     noise_scales: list[float] = Field(default_factory=lambda: [0.98])
     noise_scale_ws: list[float] = Field(default_factory=lambda: [0.98])
     length_scales: list[float] = Field(default_factory=lambda: [0.75, 1.0, 1.25])
-    slerp_weights: list[float] = Field(default_factory=lambda: [0.5])
+    slerp_weights: list[float] = Field(default_factory=lambda: [0.2, 0.35, 0.5, 0.65, 0.8])
     max_speakers: int | None = None
 
     # Paths
@@ -87,6 +88,8 @@ class WakeWordConfig(BaseModel):
     # Training
     steps: int = 50000
     learning_rate: float = 1e-4
+    weight_decay: float = 1e-2
+    label_smoothing: float = 0.05
     max_negative_weight: float = 1500.0
     target_fp_per_hour: float = 0.2
     batch_n_per_class: dict[str, int] = Field(
