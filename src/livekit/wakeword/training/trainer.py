@@ -7,6 +7,7 @@ import json
 import logging
 import math
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import TypedDict
 
@@ -116,14 +117,28 @@ class WakeWordTrainer:
                 acav_path,
             )
 
+        # Add background noise as standalone negatives if available
+        bg_features_path = model_dir / "background_noise_features.npy"
+        if bg_features_path.exists():
+            data_files["background_noise"] = bg_features_path
+        else:
+            logger.info(
+                "No background noise features found at %s. "
+                "Background noise will only be used for augmentation, not as standalone negatives.",
+                bg_features_path,
+            )
+
+        label_funcs: dict[str, Callable[[np.ndarray], int]] = {
+            "positive": lambda _: 1,
+            "adversarial_negative": lambda _: 0,
+            "ACAV100M_sample": lambda _: 0,
+            "background_noise": lambda _: 0,
+        }
+
         return create_dataloader(
             data_files=data_files,
             n_per_class=self.config.batch_n_per_class,
-            label_funcs={
-                "positive": lambda _: 1,
-                "adversarial_negative": lambda _: 0,
-                "ACAV100M_sample": lambda _: 0,
-            },
+            label_funcs={k: v for k, v in label_funcs.items() if k in data_files},
         )
 
     def _load_validation_data(self) -> tuple[np.ndarray, np.ndarray]:
