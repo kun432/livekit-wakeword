@@ -124,6 +124,13 @@ def align_clip_to_end(
     return result
 
 
+_ALL_SPLITS = [
+    "positive_train", "positive_test",
+    "negative_train", "negative_test",
+    "background_train", "background_test",
+]
+
+
 def run_augment(config: WakeWordConfig) -> None:
     """Run augmentation pipeline on generated clips."""
     import re
@@ -135,7 +142,7 @@ def run_augment(config: WakeWordConfig) -> None:
     # Clean up old augmented files before starting fresh augmentation.
     # This prevents stale _rN.wav files from previous runs piling up.
     _aug_re = re.compile(r"^clip_\d{6}_r\d+\.wav$")
-    for split in ["positive_train", "positive_test", "negative_train", "negative_test"]:
+    for split in _ALL_SPLITS:
         clip_dir = model_dir / split
         if not clip_dir.exists():
             continue
@@ -152,7 +159,7 @@ def run_augment(config: WakeWordConfig) -> None:
 
     for round_idx in range(config.augmentation.rounds):
         logger.info(f"Augmentation round {round_idx + 1}/{config.augmentation.rounds}")
-        for split in ["positive_train", "positive_test", "negative_train", "negative_test"]:
+        for split in _ALL_SPLITS:
             clip_dir = model_dir / split
             if not clip_dir.exists():
                 logger.warning(f"Skipping {split}: directory not found")

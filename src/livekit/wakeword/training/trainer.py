@@ -118,7 +118,7 @@ class WakeWordTrainer:
             )
 
         # Add background noise as standalone negatives if available
-        bg_features_path = model_dir / "background_noise_features.npy"
+        bg_features_path = model_dir / "background_noise_features_train.npy"
         if bg_features_path.exists():
             data_files["background_noise"] = bg_features_path
         else:
@@ -149,6 +149,12 @@ class WakeWordTrainer:
 
         pos = np.load(str(pos_path)) if pos_path.exists() else np.zeros((0, 16, 96))
         neg = np.load(str(neg_path)) if neg_path.exists() else np.zeros((0, 16, 96))
+
+        # Also load background noise test features if available
+        bg_test_path = model_dir / "background_noise_features_test.npy"
+        if bg_test_path.exists():
+            bg_neg = np.load(str(bg_test_path))
+            neg = np.concatenate([neg, bg_neg], axis=0) if neg.shape[0] > 0 else bg_neg
 
         # Also load validation features if available
         val_path = self.config.data_path / "features" / "validation_set_features.npy"

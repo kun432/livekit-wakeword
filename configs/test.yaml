@@ -10,6 +10,8 @@ target_phrases: ["hey livekit"]
 
 n_samples: 100
 n_samples_val: 20
+n_background_samples: 50
+n_background_samples_val: 10
 tts_batch_size: 10
 
 custom_negative_phrases:
@@ -31,7 +33,7 @@ output_dir: ./output
 augmentation:
   clip_duration: 2.0
   batch_size: 8
-  rounds: 1
+  rounds: 3
   background_paths: [./data/backgrounds]
   rir_paths: [./data/rirs]
 
