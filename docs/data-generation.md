@@ -1,11 +1,41 @@
 # Data Generation Pipeline
 
-The generation stage synthesizes positive and negative audio clips using VITS TTS with SLERP speaker blending and phoneme-based adversarial phrase generation.
+The generation stage synthesizes positive and negative audio clips using a pluggable TTS backend (default: **Piper VITS** with SLERP speaker blending, or **VoxCPM2** voice design) and phoneme-based adversarial phrase generation. Select the engine with `tts_backend` in the YAML config (`piper_vits` or `voxcpm`). **Multilingual wake words require `tts_backend: voxcpm`** — Piper follows a single checkpoint locale (bundled default is English–US). See `configs/test_voxcpm.yaml` and `configs/prod_voxcpm.yaml` for Chinese (`你好 livekit`) examples.
 
-**Source:** `src/livekit/wakeword/data/generate.py`, `src/livekit/wakeword/data/_piper_generate.py`
+**Source:** `src/livekit/wakeword/data/generate.py`, `src/livekit/wakeword/data/piper/synthesis.py`, `src/livekit/wakeword/data/tts/`
 **CLI:** `livekit-wakeword generate <config>`
 
 **System dependency:** `espeak-ng` must be installed for phonemization (`brew install espeak-ng` on macOS, `apt install espeak-ng` on Linux).
+
+## Setup and Piper artifacts
+
+`livekit-wakeword setup` installs shared data (features, RIRs, backgrounds) under a root `data_dir`. **Piper VITS** is only relevant when `tts_backend: piper_vits`.
+
+### With `--config` / `-c`
+
+Pass your wake word YAML so setup aligns with generation:
+
+- **`data_dir`** from the config is the root for all downloads (features, RIRs, backgrounds, Piper checkpoint, VoxCPM snapshot).
+- **Piper** is downloaded **only if** `tts_backend` is `piper_vits`. **VoxCPM** weights are fetched with `snapshot_download` **only if** `tts_backend` is `voxcpm` and the configured target directory is missing or empty (see **VoxCPM2** below). Otherwise TTS-specific downloads are skipped.
+- **Checkpoint path:** `piper_tts.checkpoint_relpath` is the path to the `.pt` state_dict **relative to `data_dir`**. The matching JSON config is always `same_basename.json` next to that file. Defaults to `piper/en-us-libritts-high.pt`.
+
+Example:
+
+```bash
+livekit-wakeword setup --config configs/prod.yaml
+```
+
+### Without `--config`
+
+If you omit `--config`, setup uses `--data-dir` (default `./data`) and **always** downloads the default Piper bundle to `piper/en-us-libritts-high.pt` under that root—handy when you do not have a YAML yet. Prefer `--config` for projects that use a non-default `data_dir`, a custom `piper_tts.checkpoint_relpath`, or **VoxCPM** (VoxCPM is not downloaded without `--config`).
+
+## VoxCPM2 (`tts_backend: voxcpm`)
+
+[VoxCPM2](https://github.com/OpenBMB/VoxCPM) is used in **voice design** mode only: each clip uses a text persona description plus the wake phrase (no reference-audio cloning in this integration). The Python package is optional: install with `uv sync --extra train --extra voxcpm` (upstream recommends **PyTorch ≥ 2.5**; see their docs for CUDA).
+
+**Weights on disk:** `livekit-wakeword setup --config your.yaml` runs `snapshot_download(repo_id=voxcpm_tts.model_id, ...)` into `voxcpm_local_model_path` — by default `data_dir/voxcpm/VoxCPM2` (`voxcpm_tts.model_cache_relpath`), or `voxcpm_tts.local_model_path` if set (relative to `data_dir` or absolute). If that directory is already non-empty, setup skips the download (e.g. you prefetched or copied weights there).
+
+**Diversification:** Defaults cover many `voice_design_prompts` × `cfg_values` × `inference_timesteps_list` (see `VoxCpmTtsConfig` in `config.py`). Clip *i* cycles through that Cartesian product so resumes stay aligned with `start_index`. Output is **16 kHz** `clip_%06d.wav` (model native rate is resampled with librosa).
 
 ## Overview
 
@@ -53,9 +83,9 @@ Each clip is synthesized with a combination of:
 
 The Cartesian product of `slerp_weights`, `length_scales`, `noise_scales`, and `noise_scale_ws` creates multiple prosody variations. Speaker pairs and settings are cycled until `n_samples` clips are generated.
 
-### TTS Model
+### TTS Model (Piper)
 
-The `en-us-libritts-high.pt` VITS checkpoint (~166 MB) and its `.json` config are downloaded during `livekit-wakeword setup` to `data/piper/`. The model **must** be present — generation will raise `FileNotFoundError` if the model is missing rather than producing silent placeholders.
+The default `en-us-libritts-high.pt` VITS checkpoint (~166 MB) and its `.json` config are downloaded when setup runs Piper (see **Setup and Piper artifacts**). Paths follow `piper_tts.checkpoint_relpath` under `data_dir`. The model **must** be present for `piper_vits` — generation raises `FileNotFoundError` if the checkpoint is missing instead of emitting silent placeholders.
 
 ### Error Handling
 
@@ -108,6 +138,38 @@ For each word, phonemes are replaced with a broad regex wildcard `(.){1,3}` that
 ### Custom Negatives
 
 Additional negative phrases can be specified via `custom_negative_phrases` in the config. These are appended to the auto-generated adversarial phrases before synthesis.
+
+## Adding a new TTS backend
+
+Synthetic speech is pluggable so you can swap Piper VITS for another engine (e.g. cloud or on-device models). Follow this checklist.
+
+### 1. Config
+
+- Add a new member to **`TtsBackend`** in [`config.py`](../src/livekit/wakeword/config.py) (e.g. `qwen_tts = "qwen_tts"`).
+- Add any engine-specific fields: either nested models on `WakeWordConfig` (pattern: `PiperTtsConfig` + `piper_tts`) or top-level keys, and document them in YAML.
+- Put shared path strings that **`config.py` must import** in [`tts_constants.py`](../src/livekit/wakeword/tts_constants.py), not under `livekit.wakeword.data`, so you avoid a circular import (`config` → `data` package → modules that import `config`).
+
+### 2. Implementation class
+
+- Add a module under [`data/`](../src/livekit/wakeword/data/) (e.g. `data/qwen_tts/`) with a class that satisfies **`SpeechSynthesizer`** in [`tts/backends.py`](../src/livekit/wakeword/data/tts/backends.py):
+
+  - **`validate_artifacts()`** — Ensure required weights, credentials, or binaries exist; raise `FileNotFoundError` with a clear message if not.
+  - **`synthesize_clips(phrases, output_dir, n_samples, *, start_index, batch_size)`** — Write **`clip_%06d.wav`** at **16 kHz**, honoring **`start_index`** for resume the same way Piper does.
+
+- Put **text normalization** and **voice / speaker diversification** inside the backend (not in `run_generate`). Piper uses CMUDict + SLERP; another engine should apply its own diversity strategy so training clips are not single-timbre.
+
+### 3. Registry
+
+- In **`get_tts_backend()`** in [`tts/backends.py`](../src/livekit/wakeword/data/tts/backends.py), map your `TtsBackend` value to your class (typically `YourBackend.from_config(config)` so hyperparameters are captured at construction time).
+
+### 4. Setup (optional)
+
+- If the engine needs downloaded assets, extend **`setup`** in [`cli.py`](../src/livekit/wakeword/cli.py): when `--config` is passed, branch on `config.tts_backend` and download only what that backend needs, using paths from the config (same pattern as Piper + `piper_checkpoint_path`).
+
+### 5. Tests and docs
+
+- Add unit tests for config loading and, where feasible, artifact validation.
+- Document YAML keys and setup steps in this file.
 
 ## Background Noise Clip Generation
 

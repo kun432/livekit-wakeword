@@ -8,7 +8,7 @@ from pathlib import Path
 import typer
 from rich.logging import RichHandler
 
-from .config import load_config
+from .config import TtsBackend, WakeWordConfig, load_config
 
 app = typer.Typer(
     name="livekit-wakeword",
@@ -26,21 +26,49 @@ logger = logging.getLogger("livekit.wakeword")
 
 @app.command()
 def setup(
-    data_dir: str = typer.Option("./data", help="Root data directory"),
+    data_dir: str = typer.Option(
+        "./data",
+        help="Root data directory when --config is omitted",
+    ),
+    config_path: Path | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help=(
+            "Wake word YAML: data_dir from config; Piper weights if "
+            "tts_backend is piper_vits; VoxCPM HF snapshot if tts_backend is voxcpm"
+        ),
+    ),
     skip_acav: bool = typer.Option(
         False, "--skip-acav", help="Skip downloading ACAV100M features (~16 GB)"
     ),
 ) -> None:
-    """Download external dependencies: VITS TTS model, ACAV100M features, RIRs, backgrounds."""
-    data_path = Path(data_dir)
-    data_path.mkdir(parents=True, exist_ok=True)
+    """Download external dependencies: optional Piper VITS, ACAV100M features, RIRs, backgrounds."""
+    from .data.piper.defaults import default_checkpoint_path
 
-    logger.info("Setting up livekit-wakeword data dependencies...")
-
-    # Download VITS TTS model (.pt checkpoint + config)
-    piper_dir = data_path / "piper"
-    piper_dir.mkdir(exist_ok=True)
-    _download_piper(piper_dir)
+    if config_path is not None:
+        cfg = load_config(config_path)
+        data_path = cfg.data_path.resolve()
+        data_path.mkdir(parents=True, exist_ok=True)
+        logger.info("Setting up data dependencies (from %s)...", config_path)
+        if cfg.tts_backend is TtsBackend.piper_vits:
+            pt_dest = cfg.piper_checkpoint_path
+            pt_dest.parent.mkdir(parents=True, exist_ok=True)
+            _download_piper_checkpoint(pt_dest)
+        elif cfg.tts_backend is TtsBackend.voxcpm:
+            _download_voxcpm_model(cfg)
+        else:
+            logger.info(
+                "Skipping TTS weight download (tts_backend=%s).",
+                cfg.tts_backend.value,
+            )
+    else:
+        data_path = Path(data_dir).resolve()
+        data_path.mkdir(parents=True, exist_ok=True)
+        logger.info("Setting up livekit-wakeword data dependencies...")
+        pt_dest = default_checkpoint_path(data_path)
+        pt_dest.parent.mkdir(parents=True, exist_ok=True)
+        _download_piper_checkpoint(pt_dest)
 
     # Download ACAV100M features
     features_dir = data_path / "features"
@@ -64,22 +92,27 @@ def setup(
     logger.info("Setup complete!")
 
 
-def _download_piper(piper_dir: Path) -> None:
-    """Download VITS state_dict and config JSON."""
+def _download_piper_checkpoint(pt_dest: Path) -> None:
+    """Download bundled Piper VITS state_dict and JSON config next to *pt_dest*."""
     import urllib.request
 
     from rich.progress import Progress
 
-    base_url = "https://github.com/livekit/livekit-wakeword/releases/download/v0.1.0"
+    from .data.piper.defaults import (
+        DEFAULT_RELEASE_BASE_URL,
+        RELEASE_CONFIG_JSON_ASSET,
+        RELEASE_STATE_DICT_ASSET,
+    )
 
-    # 1) Download state_dict .pt
-    pt_url = f"{base_url}/en-us-libritts-high.state_dict.pt"
-    pt_dest = piper_dir / "en-us-libritts-high.pt"
+    base_url = DEFAULT_RELEASE_BASE_URL
+
+    pt_url = f"{base_url}/{RELEASE_STATE_DICT_ASSET}"
+    pt_name = pt_dest.name
     if not pt_dest.exists():
-        logger.info("Downloading en-us-libritts-high.pt (~166 MB)...")
+        logger.info("Downloading %s (~166 MB)...", pt_name)
         try:
             with Progress() as progress:
-                task = progress.add_task("[cyan]en-us-libritts-high.pt", total=None)
+                task = progress.add_task(f"[cyan]{pt_name}", total=None)
                 tmp_path = pt_dest.with_suffix(".tmp")
 
                 def _reporthook(block_num: int, block_size: int, total: int) -> None:
@@ -88,7 +121,7 @@ def _download_piper(piper_dir: Path) -> None:
 
                 urllib.request.urlretrieve(pt_url, str(tmp_path), reporthook=_reporthook)
                 tmp_path.rename(pt_dest)
-            logger.info("Downloaded en-us-libritts-high.pt")
+            logger.info("Downloaded %s", pt_name)
         except Exception as e:
             logger.warning(f"Failed to download VITS checkpoint: {e}")
             tmp_path = pt_dest.with_suffix(".tmp")
@@ -97,9 +130,8 @@ def _download_piper(piper_dir: Path) -> None:
     else:
         logger.info(f"VITS checkpoint already exists: {pt_dest}")
 
-    # 2) Download config JSON (must be next to .pt with .json suffix)
-    json_url = f"{base_url}/en-us-libritts-high.config.json"
-    json_dest = piper_dir / "en-us-libritts-high.json"
+    json_url = f"{base_url}/{RELEASE_CONFIG_JSON_ASSET}"
+    json_dest = pt_dest.with_suffix(".json")
     if not json_dest.exists():
         logger.info("Downloading VITS config JSON...")
         try:
@@ -109,6 +141,31 @@ def _download_piper(piper_dir: Path) -> None:
             logger.warning(f"Failed to download VITS config JSON: {e}")
     else:
         logger.info(f"VITS config already exists: {json_dest}")
+
+
+def _download_voxcpm_model(cfg: WakeWordConfig) -> None:
+    """Fetch the VoxCPM HF snapshot during ``setup`` (same idea as Piper: download if missing).
+
+    Uses ``voxcpm_tts.model_id`` and ``voxcpm_local_model_path`` from config. Only runs
+    ``snapshot_download`` if that directory is missing or empty, so re-running setup does
+    not redownload gigabytes.
+    """
+    dest = cfg.voxcpm_local_model_path
+    if dest.is_dir() and any(dest.iterdir()):
+        logger.info("VoxCPM weights already present at %s", dest)
+        return
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError:
+        logger.warning(
+            "huggingface-hub not installed; cannot download VoxCPM. "
+            "Install train extras or: uv pip install huggingface-hub"
+        )
+        return
+    dest.mkdir(parents=True, exist_ok=True)
+    repo = cfg.voxcpm_tts.model_id
+    logger.info("Downloading VoxCPM snapshot %s → %s (large; may take a while)...", repo, dest)
+    snapshot_download(repo_id=repo, local_dir=str(dest))
 
 
 def _download_validation_features(features_dir: Path) -> None:

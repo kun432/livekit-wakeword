@@ -15,6 +15,7 @@ An open-source wake word library for creating voice-enabled applications. Based 
 
 - **Conv-Attention classifier** — 1D temporal convolutions + multi-head self-attention replace openWakeWord's flat DNN head, preserving temporal structure across the 16-frame embedding window for better accuracy and fewer false positives (see [comparison](#openwakeword-vs-livekit-wakeword) below)
 - **Backward compatible** with openWakeWord models and library
+- **Multilingual support** — support over 30 languages with VoxCPM synthetic data generation
 - **Train anywhere** — local machine, cloud, or spawn [SkyPilot](https://github.com/skypilot-org/skypilot) jobs
 - **Zero dependency headaches** — uv handles everything
 
@@ -23,6 +24,7 @@ An open-source wake word library for creating voice-enabled applications. Based 
 - [Using Existing Models](#using-existing-models-and-library)
 - [Training New Models Using The CLI](#training-new-models-using-the-cli)
 - [Training New Models Using The Python API](#training-new-models-using-the-python-api)
+- [Training Multilingual Wake Words](#multilingual-support)
 - [openWakeWord vs livekit-wakeword](#openwakeword-vs-livekit-wakeword)
 - [Example: Wake Word–Triggered Agent](https://github.com/livekit-examples/hello-wakeword)
 
@@ -129,30 +131,39 @@ livekit-wakeword setup
 **Train a wake word:**
 
 ```bash
-livekit-wakeword run configs/hey_livekit.yaml
+livekit-wakeword run configs/prod.yaml
 ```
 
 Or run stages individually:
 
 ```bash
-livekit-wakeword generate configs/hey_livekit.yaml  # TTS synthesis + adversarial negatives
-livekit-wakeword augment configs/hey_livekit.yaml   # Augment + extract features
-livekit-wakeword train configs/hey_livekit.yaml     # 3-phase adaptive training
-livekit-wakeword export configs/hey_livekit.yaml    # Export to ONNX
-livekit-wakeword eval configs/hey_livekit.yaml      # Evaluate model (DET curve, AUT, FPPH)
+livekit-wakeword generate configs/prod.yaml  # TTS synthesis + adversarial negatives
+livekit-wakeword augment configs/prod.yaml   # Augment + extract features
+livekit-wakeword train configs/prod.yaml     # 3-phase adaptive training
+livekit-wakeword export configs/prod.yaml    # Export to ONNX
+livekit-wakeword eval configs/prod.yaml      # Evaluate model (DET curve, AUT, FPPH)
 ```
 
 You can also evaluate any compatible ONNX model (e.g., one trained with openWakeWord):
 
 ```bash
-livekit-wakeword eval configs/hey_livekit.yaml -m /path/to/other_model.onnx
+livekit-wakeword eval configs/prod.yaml -m /path/to/other_model.onnx
 ```
 
 Eval produces a DET curve plot and metrics JSON in the output directory. See [Evaluation](docs/evaluation.md) for details.
 
-**Config:**
+### Configuration
 
-See [configs/hey_livekit.yaml](configs/hey_livekit.yaml) for all options.
+The full pipeline runs based on a single YAML configuration file. You can find example configs here:
+
+| Config                                               | Wake word      | Use                                                      |
+| ---------------------------------------------------- | -------------- | -------------------------------------------------------- |
+| [configs/prod.yaml](configs/prod.yaml)               | "hey livekit"  | Production-scale for English with **Piper TTS** backbone |
+| [configs/test.yaml](configs/test.yaml)               | "hey livekit"  | Small end-to-end test run with **Piper TTS** backbone    |
+| [configs/prod_voxcpm.yaml](configs/prod_voxcpm.yaml) | "你好 livekit" | Production-scale multilingual with **VoxCPM** backbone   |
+| [configs/test_voxcpm.yaml](configs/test_voxcpm.yaml) | "你好 livekit" | Small end-to-end test run with **VoxCPM** backbone       |
+
+The bare minimum configuration required is as follows:
 
 ```yaml
 model_name: hey_livekit
@@ -167,13 +178,29 @@ steps: 50000
 target_fp_per_hour: 0.2
 ```
 
-**Train on cloud GPUs with SkyPilot:**
+### Multilingual Support
 
-See [skypilot/train.yaml](skypilot/train.yaml) for SkyPilot's example training job on Nebius.
+We support training wake words in 30 languages with [VoxCPM2 TTS](https://github.com/OpenBMB/VoxCPM) synthetic data generation:
+
+```
+Arabic, Burmese, Chinese, Danish, Dutch, English, Finnish, French, German, Greek, Hebrew, Hindi, Indonesian, Italian, Japanese, Khmer, Korean, Lao, Malay, Norwegian, Polish, Portuguese, Russian, Spanish, Swahili, Swedish, Tagalog, Thai, Turkish, Vietnamese
+
+Chinese Dialect: 四川话, 粤语, 吴语, 东北话, 河南话, 陕西话, 山东话, 天津话, 闽南话
+```
+
+To use this, add `tts_backend` in your configuration YAML:
+
+```yaml
+tts_backend: voxcpm
+```
+
+And install `livekit-wakeword` with `voxcpm` optional dependency:
 
 ```bash
-sky launch skypilot/train.yaml
+pip install livekit-wakeword[train,eval,export,voxcpm]
 ```
+
+More detail: [docs/data-generation.md](docs/data-generation.md) (Piper, VoxCPM, setup).
 
 ### Training New Models Using The Python API
 
@@ -192,7 +219,7 @@ from livekit.wakeword import (
 )
 
 # Load from YAML or construct directly
-config = load_config("configs/hey_livekit.yaml")
+config = load_config("configs/prod.yaml")
 
 # Or build a config programmatically
 config = WakeWordConfig(
@@ -215,6 +242,14 @@ print(f"AUT={results['aut']:.4f}  FPPH={results['fpph']:.2f}  Recall={results['r
 ```
 
 This is useful for integrating wake word training into larger pipelines, automating model iteration, or building custom tooling on top of the data generation and training stages.
+
+### Train on cloud GPUs with SkyPilot
+
+See [skypilot/train.yaml](skypilot/train.yaml) for SkyPilot's example training job on Nebius.
+
+```bash
+sky launch skypilot/train.yaml
+```
 
 ## openWakeWord vs livekit-wakeword
 
