@@ -40,6 +40,7 @@ class TtsBackend(StrEnum):
 
     piper_vits = "piper_vits"
     voxcpm = "voxcpm"
+    voxcpm_nanovllm = "voxcpm_nanovllm"
 
 
 # Preset mapping: size -> (layer_dim, n_blocks)
@@ -110,6 +111,38 @@ class VoxCpmTtsConfig(BaseModel):
     )
 
 
+class VoxCpmNanoVllmTtsConfig(BaseModel):
+    """Nano-vLLM runtime settings for VoxCPM2 generation.
+
+    Model artifacts are still resolved via ``voxcpm_tts`` and ``data_dir``.
+    This config only controls the Nano-vLLM runtime behavior.
+    """
+
+    inference_timesteps: int = Field(default=10, ge=1)
+    temperature_values: list[float] = Field(default_factory=lambda: [1.0])
+    devices: list[int] = Field(default_factory=lambda: [0])
+    max_num_seqs: int = Field(default=8, ge=1)
+    concurrency: int = Field(default=4, ge=1)
+    max_num_batched_tokens: int = Field(default=8192, ge=1)
+    gpu_memory_utilization: float = Field(default=0.9, gt=0.0, le=1.0)
+    enforce_eager: bool = False
+
+    @model_validator(mode="after")
+    def _validate_runtime(self) -> Self:
+        if not self.temperature_values:
+            raise ValueError("voxcpm_nanovllm_tts.temperature_values must be non-empty")
+        if not self.devices:
+            raise ValueError("voxcpm_nanovllm_tts.devices must be non-empty")
+        if self.concurrency > self.max_num_seqs:
+            _logger.warning(
+                "voxcpm_nanovllm_tts.concurrency=%d exceeds max_num_seqs=%d. "
+                "This may reduce throughput or increase queuing.",
+                self.concurrency,
+                self.max_num_seqs,
+            )
+        return self
+
+
 class WakeWordConfig(BaseModel):
     """Top-level config for a wake word model."""
 
@@ -125,6 +158,9 @@ class WakeWordConfig(BaseModel):
     tts_backend: TtsBackend = TtsBackend.piper_vits
     piper_tts: PiperTtsConfig = Field(default_factory=PiperTtsConfig)
     voxcpm_tts: VoxCpmTtsConfig = Field(default_factory=VoxCpmTtsConfig)
+    voxcpm_nanovllm_tts: VoxCpmNanoVllmTtsConfig = Field(
+        default_factory=VoxCpmNanoVllmTtsConfig
+    )
     custom_negative_phrases: list[str] = Field(default_factory=list)
 
     # TTS parameters (Piper VITS + SLERP speaker blending)

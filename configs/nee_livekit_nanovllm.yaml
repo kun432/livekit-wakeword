@@ -1,0 +1,78 @@
+# Mid-scale Japanese wake-word config using Nano-vLLM VoxCPM2.
+# Intended for faster iteration than full prod while being large enough
+# to judge generation speed and rough training quality.
+
+model_name: nee_livekit_nanovllm
+
+target_phrases:
+  - "ねぇライブキット"
+
+tts_backend: voxcpm_nanovllm
+
+voxcpm_tts:
+  model_id: openbmb/VoxCPM2
+  model_cache_relpath: voxcpm/VoxCPM2
+  local_model_path: null
+  load_denoiser: false
+  cfg_values: [1.5, 2.0, 2.5, 3.0]
+  inference_timesteps_list: [10]
+  voice_design_prompts:
+    - "young woman, clear voice, fast"
+    - "young man, warm voice, fast"
+    - "adult woman, low-pitched voice, fast"
+    - "adult man, deep voice, fast"
+    - "bright voice, fast"
+    - "soft voice, fast"
+    - "crisp voice, fast"
+    - "light voice, fast"
+
+voxcpm_nanovllm_tts:
+  inference_timesteps: 10
+  temperature_values: [1.0]
+  devices: [0]
+  max_num_seqs: 8
+  concurrency: 4
+  max_num_batched_tokens: 8192
+  gpu_memory_utilization: 0.9
+  enforce_eager: false
+
+n_samples: 5000
+n_samples_val: 1000
+n_background_samples: 500
+n_background_samples_val: 100
+tts_batch_size: 16
+
+custom_negative_phrases:
+  - "ねぇライフキット"
+  - "ねぇドライブキット"
+  - "ねぇライクキット"
+  - "ねぇライブヒット"
+  - "ねぇライブビット"
+  - "ねぇライブイット"
+
+data_dir: ./data
+output_dir: ./output
+
+augmentation:
+  clip_duration: 2.0
+  batch_size: 8
+  rounds: 1
+  background_paths: [./data/backgrounds]
+  rir_paths: [./data/rirs]
+
+model:
+  model_type: conv_attention
+  model_size: small
+
+steps: 30000
+learning_rate: 0.0003
+weight_decay: 0.01
+label_smoothing: 0.05
+max_negative_weight: 1500
+target_fp_per_hour: 0.5
+
+batch_n_per_class:
+  positive: 25
+  adversarial_negative: 25
+  ACAV100M_sample: 256
+  background_noise: 25

@@ -55,7 +55,7 @@ def setup(
             pt_dest = cfg.piper_checkpoint_path
             pt_dest.parent.mkdir(parents=True, exist_ok=True)
             _download_piper_checkpoint(pt_dest)
-        elif cfg.tts_backend is TtsBackend.voxcpm:
+        elif cfg.tts_backend in {TtsBackend.voxcpm, TtsBackend.voxcpm_nanovllm}:
             _download_voxcpm_model(cfg)
         else:
             logger.info(
