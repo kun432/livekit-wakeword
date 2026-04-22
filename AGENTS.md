@@ -90,6 +90,6 @@ For detailed documentation on each pipeline stage, see `docs/`:
 
 ## Code Style
 
-- Python 3.12+, line length 100
+- Python 3.12, line length 100
 - Ruff for linting/formatting, mypy strict mode
 - Build system: hatchling, src layout (`src/livekit/wakeword/`)

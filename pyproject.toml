@@ -7,7 +7,7 @@ name = "livekit-wakeword"
 dynamic = ["version"]
 description = "Wake word detection for voice-enabled applications"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 license = "Apache-2.0"
 authors = [{ name = "Binh Pham", email = "binh.pham@livekit.io" }]
 keywords = ["wake-word", "keyword-spotting", "voice", "speech", "livekit", "onnx"]
@@ -17,7 +17,6 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Sound/Audio :: Speech",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
@@ -34,8 +33,8 @@ listener = [
     "pyaudio>=0.2.14",
 ]
 train = [
-    "torch>=2.5,<2.10",
-    "torchaudio>=2.5,<2.10",
+    "torch==2.9.1",
+    "torchaudio==2.9.1",
     "pydantic>=2.0",
     "typer>=0.12",
     "pyyaml>=6.0",
