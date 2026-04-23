@@ -162,3 +162,5 @@ def test_voxcpm_nanovllm_defaults() -> None:
     assert cfg.voxcpm_nanovllm_tts.devices == [0]
     assert cfg.voxcpm_nanovllm_tts.max_num_seqs == 8
     assert cfg.voxcpm_nanovllm_tts.concurrency == 4
+    assert cfg.tts_normalization.enabled is False
+    assert cfg.tts_normalization.max_duration_s == 2.5

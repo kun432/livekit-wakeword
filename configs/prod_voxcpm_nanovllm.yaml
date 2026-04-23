@@ -6,6 +6,9 @@ target_phrases:
   - "ねぇライブキット"
 
 tts_backend: voxcpm_nanovllm
+tts_normalization:
+  enabled: true
+  max_duration_s: 2.5
 
 voxcpm_tts:
   model_id: openbmb/VoxCPM2
@@ -15,14 +18,56 @@ voxcpm_tts:
   cfg_values: [1.5, 2.0, 2.5, 3.0]
   inference_timesteps_list: [10]
   voice_design_prompts:
-    - "young woman, clear voice, fast"
-    - "young man, warm voice, fast"
-    - "adult woman, low-pitched voice, fast"
-    - "adult man, deep voice, fast"
-    - "bright voice, fast"
-    - "soft voice, fast"
-    - "crisp voice, fast"
-    - "light voice, fast"
+    - "A young adult woman, clear mid-pitch voice, fast pace, calm and professional"
+    - "A young adult man, warm baritone, fast pace, friendly and articulate"
+    - "A middle-aged woman, slightly low pitch, measured fast pace, confident tone"
+    - "A middle-aged man, deep resonant voice, fast deliberate pace"
+    - "An older adult woman, soft gentle voice, medium-fast pace, kind tone"
+    - "An older adult man, gravelly tenor, medium-fast pace, matter-of-fact"
+    - "A young woman, bright energetic tone, fast pace"
+    - "A young man, light tenor, quick conversational pace"
+    - "A woman in her thirties, smooth alto, even fast pace"
+    - "A man in his thirties, clear baritone, brisk businesslike pace"
+    - "A speaker with a higher pitch, enthusiastic and upbeat, fast pace"
+    - "A speaker with a lower pitch, relaxed and laid-back, medium-fast pace"
+    - "A young adult, gender-neutral delivery, soft volume, careful fast enunciation"
+    - "A confident presenter voice, strong projection, fast speed"
+    - "A quiet intimate voice, close-mic feel, medium-fast and clear"
+    - "A news-anchor style voice, authoritative, brisk even rhythm"
+    - "A friendly customer-service tone, slightly smiling, medium-fast pace"
+    - "A tired but clear voice, subdued energy, steady fast pace"
+    - "A cheerful animated voice, wide pitch range, lively fast pace"
+    - "A serious formal voice, minimal emotion, precise fast articulation"
+    - "A Southern US English accent, warm tone, quick conversational pace"
+    - "A British English accent, clear RP-like delivery, medium-fast pace"
+    - "A speaker with slight vocal fry, casual young adult, medium-fast pace"
+    - "A very smooth polished voice, studio quality, medium-fast pace"
+    - "A nasal bright tone, energetic, fast pace"
+    - "A breathy soft voice, gentle, medium-fast pace"
+    - "A robust athletic-sounding voice, strong and direct, fast pace"
+    - "A scholarly tone, thoughtful but brisk pace"
+    - "A teenager-sounding voice, casual, fast, light pitch"
+    - "A mature executive voice, controlled low dynamics, brisk steady pace"
+    - "A sing-song playful tone, varied pitch, medium-fast pace"
+    - "A monotone flat delivery, robotic clarity, fast even speed"
+    - "A husky voice, low energy, medium-fast pace"
+    - "A crisp precise voice, minimal accent, fast clear speech"
+    - "A young adult woman, bright soprano, fast conversational pace"
+    - "A young adult man, mellow tenor, fast natural pace"
+    - "A middle-aged woman, rich alto, quick friendly delivery"
+    - "A middle-aged man, solid bass-baritone, fast clean delivery"
+    - "An older woman, dry airy tone, brisk speaking style"
+    - "An older man, textured low voice, brisk measured style"
+    - "A bright youthful voice, high energy, fast pace"
+    - "A soft restrained voice, low energy, medium-fast pace"
+    - "A crisp studio voice, low noise, fast pace"
+    - "A casual everyday voice, natural tone, fast pace"
+    - "A polished narrator voice, smooth cadence, medium-fast pace"
+    - "A direct assertive voice, sharp consonants, fast pace"
+    - "A light cheerful voice, smiling tone, fast pace"
+    - "A grounded steady voice, neutral affect, medium-fast pace"
+    - "A youthful androgynous voice, clear diction, fast pace"
+    - "A mature low-pitched voice, even rhythm, fast pace"
 
 voxcpm_nanovllm_tts:
   inference_timesteps: 10
@@ -34,8 +79,8 @@ voxcpm_nanovllm_tts:
   gpu_memory_utilization: 0.95
   enforce_eager: false
 
-n_samples: 25000
-n_samples_val: 5000
+n_samples: 50000
+n_samples_val: 10000
 n_background_samples: 2000
 n_background_samples_val: 500
 tts_batch_size: 50
@@ -54,7 +99,7 @@ output_dir: ./output
 augmentation:
   clip_duration: 2.0
   batch_size: 16
-  rounds: 3
+  rounds: 1
   background_paths: [./data/backgrounds]
   rir_paths: [./data/rirs]
 

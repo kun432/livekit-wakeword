@@ -297,6 +297,28 @@ def augment(
     logger.info("Feature extraction complete!")
 
 
+@app.command("normalize-tts")
+def normalize_tts(
+    config_path: str = typer.Argument(..., help="Path to wake word config YAML"),
+) -> None:
+    """Normalize generated TTS clips before augmentation."""
+    config = load_config(config_path)
+
+    if config.tts_backend not in {TtsBackend.voxcpm, TtsBackend.voxcpm_nanovllm}:
+        logger.info(
+            "Skipping normalize-tts for tts_backend=%s "
+            "(only supported for voxcpm / voxcpm_nanovllm)",
+            config.tts_backend.value,
+        )
+        return
+
+    logger.info(f"Normalizing generated TTS clips for '{config.model_name}'...")
+
+    from .data.normalize_tts import run_normalize_tts
+
+    run_normalize_tts(config)
+
+
 @app.command()
 def train(
     config_path: str = typer.Argument(..., help="Path to wake word config YAML"),
@@ -372,26 +394,39 @@ def run(
     from .data.augment import run_augment
     from .data.features import run_extraction
     from .data.generate import run_generate
+    from .data.normalize_tts import run_normalize_tts
     from .eval.evaluate import run_eval
     from .export.onnx import run_export
     from .training.trainer import run_train
 
-    logger.info("Step 1/6: Generate synthetic data")
+    total_steps = 7 if config.tts_normalization.enabled else 6
+
+    logger.info("Step 1/%d: Generate synthetic data", total_steps)
     run_generate(config)
 
-    logger.info("Step 2/6: Augment clips")
+    next_step = 2
+    if config.tts_normalization.enabled:
+        logger.info("Step %d/%d: Normalize TTS clips", next_step, total_steps)
+        run_normalize_tts(config)
+        next_step += 1
+
+    logger.info("Step %d/%d: Augment clips", next_step, total_steps)
     run_augment(config)
+    next_step += 1
 
-    logger.info("Step 3/6: Extract features")
+    logger.info("Step %d/%d: Extract features", next_step, total_steps)
     run_extraction(config)
+    next_step += 1
 
-    logger.info("Step 4/6: Train classifier")
+    logger.info("Step %d/%d: Train classifier", next_step, total_steps)
     run_train(config)
+    next_step += 1
 
-    logger.info("Step 5/6: Export to ONNX")
+    logger.info("Step %d/%d: Export to ONNX", next_step, total_steps)
     onnx_path = run_export(config)
+    next_step += 1
 
-    logger.info("Step 6/6: Evaluate model")
+    logger.info("Step %d/%d: Evaluate model", next_step, total_steps)
     results = run_eval(config, onnx_path)
     logger.info(
         f"Eval: AUT={results['aut']:.4f}  FPPH={results['fpph']:.2f}  "

@@ -60,6 +60,11 @@ class AugmentationConfig(BaseModel):
     rir_paths: list[str] = Field(default_factory=lambda: ["./data/rirs"])
 
 
+class TtsNormalizationConfig(BaseModel):
+    enabled: bool = False
+    max_duration_s: float = Field(default=2.5, gt=0.0)
+
+
 class ModelConfig(BaseModel):
     model_type: ModelType = ModelType.conv_attention
     model_size: ModelSize = ModelSize.small
@@ -176,6 +181,7 @@ class WakeWordConfig(BaseModel):
 
     # Augmentation
     augmentation: AugmentationConfig = Field(default_factory=AugmentationConfig)
+    tts_normalization: TtsNormalizationConfig = Field(default_factory=TtsNormalizationConfig)
 
     # Model
     model: ModelConfig = Field(default_factory=ModelConfig)

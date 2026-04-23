@@ -6,6 +6,9 @@ target_phrases:
   - "ねぇライブキット"
 
 tts_backend: voxcpm_nanovllm
+tts_normalization:
+  enabled: true
+  max_duration_s: 2.5
 
 voxcpm_tts:
   voice_design_prompts:
